@@ -485,6 +485,7 @@ impl AutoloadFileCache {
     }
 }
 
+#[cfg(all(test, unix))]
 #[test]
 #[serial]
 fn test_autoload() {

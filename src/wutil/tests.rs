@@ -45,7 +45,16 @@ fn test_wdirname_wbasename() {
     }
 
     // Ensure strings which greatly exceed PATH_MAX still work (#7837).
-    const PATH_MAX: usize = libc::PATH_MAX as usize;
+    const PATH_MAX: usize = {
+        #[cfg(any(unix, target_os = "wasi"))]
+        {
+            libc::PATH_MAX as usize
+        }
+        #[cfg(windows)]
+        {
+            32767
+        } // максимум для WinAPI в WCHAR
+    } as usize;
     let mut longpath = WString::new();
     longpath.reserve(PATH_MAX * 2 + 10);
     while longpath.char_count() <= PATH_MAX * 2 {

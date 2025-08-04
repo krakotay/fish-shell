@@ -11,8 +11,10 @@ use crate::{
     highlight::{highlight_shell, HighlightRole, HighlightSpec},
     operation_context::{OperationContext, EXPANSION_LIMIT_BACKGROUND, EXPANSION_LIMIT_DEFAULT},
 };
+#[cfg(not(windows))]
 use libc::PATH_MAX;
 
+#[cfg(not(windows))]
 // Helper to return a string whose length greatly exceeds PATH_MAX.
 fn get_overlong_path() -> String {
     let path_max = usize::try_from(PATH_MAX).unwrap();

@@ -106,7 +106,8 @@ pub mod wcstringutil;
 pub mod wgetopt;
 pub mod widecharwidth;
 pub mod wildcard;
-
+mod platform;
+mod compat;
 pub extern crate fish_gettext_extraction;
 
 #[cfg(test)]

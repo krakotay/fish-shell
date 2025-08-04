@@ -18,8 +18,7 @@ use crate::{
         CompleteOptionType, CompletionMode,
     },
 };
-use libc::STDOUT_FILENO;
-
+use crate::compat::fd::STDOUT_FILENO;
 // builtin_complete_* are a set of rather silly looping functions that make sure that all the proper
 // combinations of complete_add or complete_remove get called. This is needed since complete allows
 // you to specify multiple switches on a single commandline, like 'complete -s a -s b -s c', but the

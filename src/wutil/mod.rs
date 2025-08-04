@@ -104,7 +104,16 @@ pub fn perror_io(s: &str, e: &io::Error) {
 
 /// Wide character version of getcwd().
 pub fn wgetcwd() -> WString {
-    let mut cwd = [b'\0'; libc::PATH_MAX as usize];
+    let mut cwd = [b'\0'; {
+        #[cfg(any(unix, target_os = "wasi"))]
+        {
+            libc::PATH_MAX as usize
+        }
+        #[cfg(windows)]
+        {
+            32767
+        } // максимум для WinAPI в WCHAR
+    } as usize];
     let res = unsafe {
         libc::getcwd(
             std::ptr::addr_of_mut!(cwd).cast(),

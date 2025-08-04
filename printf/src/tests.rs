@@ -847,6 +847,7 @@ fn test_locale() {
 
 #[test]
 #[ignore]
+#[cfg(not(target_os = "windows"))]
 fn test_float_hex_prec() {
     // Check that libc and our hex float formatting agree for each precision.
     // Note that our hex float formatting rounds according to the rounding mode,
@@ -885,7 +886,7 @@ fn test_float_hex_prec() {
     }
     assert!(!failed);
 }
-
+#[cfg(not(target_os = "windows"))]
 fn test_exhaustive(rust_fmt: &str, c_fmt: *const c_char) {
     // "There's only 4 billion floats so test them all."
     // This tests a format string expected to be of the form "%.*g" or "%.*e".
@@ -927,6 +928,7 @@ fn test_exhaustive(rust_fmt: &str, c_fmt: *const c_char) {
 
 #[test]
 #[ignore]
+#[cfg(not(target_os = "windows"))]
 fn test_float_g_exhaustive() {
     // To run: cargo test test_float_g_exhaustive --release -- --ignored --nocapture
     test_exhaustive("%.*g", b"%.*g\0".as_ptr() as *const c_char);
@@ -934,6 +936,7 @@ fn test_float_g_exhaustive() {
 
 #[test]
 #[ignore]
+#[cfg(not(target_os = "windows"))]
 fn test_float_e_exhaustive() {
     // To run: cargo test test_float_e_exhaustive --release -- --ignored --nocapture
     test_exhaustive("%.*e", b"%.*e\0".as_ptr() as *const c_char);
@@ -941,6 +944,7 @@ fn test_float_e_exhaustive() {
 
 #[test]
 #[ignore]
+#[cfg(not(target_os = "windows"))]
 fn test_float_f_exhaustive() {
     // To run: cargo test test_float_f_exhaustive --release -- --ignored --nocapture
     test_exhaustive("%.*f", b"%.*f\0".as_ptr() as *const c_char);

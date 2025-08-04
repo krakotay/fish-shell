@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use libc::STDIN_FILENO;
+use crate::compat::fd::STDIN_FILENO;
 use once_cell::sync::OnceCell;
 
 use crate::{

@@ -370,7 +370,7 @@ fn fish_parse_opt(args: &mut [WString], opts: &mut FishCmdOpts) -> ControlFlow<i
     // We are an interactive session if we have not been given an explicit
     // command or file to execute and stdin is a tty. Note that the -i or
     // --interactive options also force interactive mode.
-    if opts.batch_cmds.is_empty() && optind == args.len() && isatty(libc::STDIN_FILENO) {
+    if opts.batch_cmds.is_empty() && optind == args.len() && isatty(crate::compat::fd::STDIN_FILENO) {
         set_interactive_session(true);
     }
 
@@ -583,7 +583,7 @@ fn throwing_main() -> i32 {
         parser.libdata_mut().exit_current_script = false;
     } else if my_optind == args.len() {
         // Implicitly interactive mode.
-        if opts.no_exec && isatty(libc::STDIN_FILENO) {
+        if opts.no_exec && isatty(crate::compat::fd::STDIN_FILENO) {
             FLOG!(
                 error,
                 "no-execute mode enabled and no script given. Exiting"
@@ -591,7 +591,7 @@ fn throwing_main() -> i32 {
             // above line should always exit
             return libc::EXIT_FAILURE;
         }
-        res = reader_read(parser, libc::STDIN_FILENO, &IoChain::new());
+        res = reader_read(parser, crate::compat::fd::STDIN_FILENO, &IoChain::new());
     } else {
         let n = wcs2string(&args[my_optind]);
         let path = OsStr::from_bytes(&n);

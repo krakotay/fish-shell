@@ -3,7 +3,78 @@ use crate::abbrs::{self, Abbreviation, Position};
 use crate::common::{escape, escape_string, valid_func_name, EscapeStringStyle};
 use crate::env::{EnvMode, EnvStackSetResult};
 use crate::re::{regex_make_anchored, to_boxed_chars};
+#[cfg(feature="regex-pcre2")]
 use pcre2::utf32::{Regex, RegexBuilder};
+// --- Регэкспы: совместимость PCRE2 / fancy-regex ----------------------------
+
+// Вариант с PCRE2 (как и раньше)
+#[cfg(feature = "regex-pcre2")]
+use pcre2::utf32::{Regex, RegexBuilder};
+
+// Чисто-Rust вариант (fancy-regex): даём совместимые типы.
+#[cfg(all(not(feature = "regex-pcre2"), feature = "regex-rust"))]
+pub struct Regex(fancy_regex::Regex);
+
+#[cfg(all(not(feature = "regex-pcre2"), feature = "regex-rust"))]
+pub struct RegexBuilder {
+    caseless: bool,
+    block_utf_pattern_directive: bool,
+}
+
+#[cfg(all(not(feature = "regex-pcre2"), feature = "regex-rust"))]
+impl RegexBuilder {
+    pub fn new() -> Self {
+        Self { caseless: false, block_utf_pattern_directive: false }
+    }
+    pub fn caseless(&mut self, v: bool) -> &mut Self {
+        self.caseless = v;
+        self
+    }
+    pub fn block_utf_pattern_directive(&mut self, v: bool) -> &mut Self {
+        // У fancy-regex нет "(*UTF)" — опцию просто игнорируем для совместимости.
+        self.block_utf_pattern_directive = v;
+        self
+    }
+    pub fn build(&self, pattern_utf32: Box<[char]>) -> Result<Regex, RegexBuildError> {
+        let mut pat: String = pattern_utf32.iter().collect();
+        if self.caseless {
+            // Иммитируем "caseless": (?i:pattern)
+            pat = format!("(?i:{})", pat);
+        }
+        fancy_regex::Regex::new(&pat)
+            .map(Regex)
+            .map_err(|e| RegexBuildError(e.to_string()))
+    }
+}
+
+/// Ошибка "как у PCRE2": есть сообщение и (опционально) оффсет.
+/// У fancy-regex оффсета нет — отдаём None, сообщение формируем из Display.
+#[cfg(all(not(feature = "regex-pcre2"), feature = "regex-rust"))]
+pub struct RegexBuildError(String);
+
+#[cfg(all(not(feature = "regex-pcre2"), feature = "regex-rust"))]
+impl RegexBuildError {
+    pub fn error_message(&self) -> WString {
+        WString::from_str(&self.0)
+    }
+    pub fn offset(&self) -> Option<usize> {
+        None
+    }
+}
+
+// Небольшой удобный API, если где-то создаёшь Regex напрямую без Builder.
+#[cfg(all(not(feature = "regex-pcre2"), feature = "regex-rust"))]
+impl Regex {
+    /// Совместимая с pcre2 сигнатура: принимает UTF‑32 (массив char).
+    pub fn new(pattern_utf32: &[char]) -> Result<Self, fancy_regex::Error> {
+        let pat: String = pattern_utf32.iter().collect();
+        fancy_regex::Regex::new(&pat).map(Regex)
+    }
+    pub fn is_match(&self, text_utf32: &[char]) -> Result<bool, fancy_regex::Error> {
+        let s: String = text_utf32.iter().collect();
+        self.0.is_match(&s)
+    }
+}
 
 const CMD: &wstr = L!("abbr");
 

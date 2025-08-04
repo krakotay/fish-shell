@@ -6,7 +6,9 @@ use crate::reader::{reader_save_screen_state, reader_write_title};
 use crate::tokenizer::tok_command;
 use crate::wutil::perror;
 use crate::{env::EnvMode, tty_handoff::TtyHandoff};
-use libc::{STDIN_FILENO, TCSADRAIN};
+#[cfg(unix)]
+use libc::{TCSADRAIN, tcsetattr};
+use crate::compat::fd::STDIN_FILENO;
 
 use super::prelude::*;
 
@@ -141,6 +143,7 @@ pub fn fg(parser: &Parser, streams: &mut IoStreams, argv: &mut [&wstr]) -> Built
     parser.job_promote_at(job_pos);
     let mut handoff = TtyHandoff::new(reader_save_screen_state);
     let _ = make_fd_blocking(STDIN_FILENO);
+    #[cfg(unix)]
     {
         let job_group = job.group();
         job_group.set_is_foreground(true);
@@ -150,12 +153,17 @@ pub fn fg(parser: &Parser, streams: &mut IoStreams, argv: &mut [&wstr]) -> Built
         let tmodes = job_group.tmodes.borrow();
         if job_group.wants_terminal() && tmodes.is_some() {
             let termios = tmodes.as_ref().unwrap();
-            let res = unsafe { libc::tcsetattr(STDIN_FILENO, TCSADRAIN, termios) };
+            let res = unsafe { tcsetattr(STDIN_FILENO, TCSADRAIN, termios) };
             if res < 0 {
                 perror("tcsetattr");
             }
         }
     }
+    #[cfg(not(unix))]
+    {
+        // На Windows termios отсутствует, поэтому просто пропускаем изменение атрибутов TTY.
+    }
+
     handoff.to_job_group(job.group.as_ref().unwrap());
     let resumed = job.resume();
     if resumed {

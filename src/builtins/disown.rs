@@ -9,6 +9,7 @@ use crate::{
     wchar::wstr,
     wutil::{fish_wcstoi, wgettext_fmt},
 };
+#[cfg(unix)]
 use libc::SIGCONT;
 
 /// Helper for builtin_disown.
@@ -22,15 +23,22 @@ fn disown_job(cmd: &wstr, streams: &mut IoStreams, j: &Job) {
     let pgid = j.get_pgid();
     if j.is_stopped() {
         if let Some(pgid) = pgid {
+            #[cfg(unix)]
             unsafe {
                 libc::killpg(pgid.as_pid_t(), SIGCONT);
             }
         }
+        #[cfg(unix)]
         streams.err.append(wgettext_fmt!(
             "%ls: job %d ('%ls') was stopped and has been signalled to continue.\n",
             cmd,
             j.job_id(),
             j.command()
+        ));
+        #[cfg(not(unix))]
+        streams.err.append(wgettext_fmt!(
+            "%ls: job %d ('%ls') is stopped (continuation signaling is not supported on this platform).\n",
+            cmd, j.job_id(), j.command()
         ));
     }
 

@@ -4,7 +4,7 @@ use super::prelude::*;
 use crate::io::IoBufferfill;
 use crate::parser::BlockType;
 use crate::wcstringutil::join_strings;
-use libc::{STDERR_FILENO, STDOUT_FILENO};
+use crate::compat::fd::{STDERR_FILENO, STDOUT_FILENO};
 
 pub fn eval(parser: &Parser, streams: &mut IoStreams, args: &mut [&wstr]) -> BuiltinResult {
     let argc = args.len();

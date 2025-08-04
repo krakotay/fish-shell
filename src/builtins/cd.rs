@@ -8,8 +8,18 @@ use crate::{
     wutil::{normalize_path, wperror, wreadlink},
 };
 use errno::Errno;
-use libc::{fchdir, EACCES, ELOOP, ENOENT, ENOTDIR, EPERM};
-use std::{os::fd::AsRawFd, sync::Arc};
+use libc::{EACCES, ELOOP, ENOENT, ENOTDIR, EPERM};
+use std::sync::Arc;
+
+// Unix‑специфичное: fchdir + AsRawFd есть только на Unix.
+#[cfg(unix)]
+use libc::fchdir;
+#[cfg(unix)]
+use std::os::fd::AsRawFd;
+
+// Windows: будем дергать set_current_dir, нужна конвертация WString -> OsString.
+#[cfg(windows)]
+use crate::common::wcs2osstring;
 
 // The cd builtin. Changes the current directory to the one specified or to $HOME if none is
 // specified. The directory can be relative to any directory in the CDPATH variable.
@@ -86,11 +96,30 @@ pub fn cd(parser: &Parser, streams: &mut IoStreams, args: &mut [&wstr]) -> Built
 
         let res = wopen_dir(&norm_dir, BEST_O_SEARCH).map_err(|err| err as i32);
 
+        #[cfg(unix)]
         let res = res.and_then(|fd| {
             if unsafe { fchdir(fd.as_raw_fd()) } == 0 {
                 Ok(fd)
             } else {
                 Err(errno::errno().0)
+            }
+        });
+
+        #[cfg(windows)]
+        let res = res.and_then(|fd| {
+            // На Windows меняем текущую директорию процессуально.
+            match std::env::set_current_dir(wcs2osstring(&norm_dir)) {
+                Ok(()) => Ok(fd),
+                Err(e) => {
+                    // Сопоставим наиболее ожидаемые коды под логику ниже.
+                    let err = match e.kind() {
+                        std::io::ErrorKind::NotFound => ENOENT,
+                        std::io::ErrorKind::PermissionDenied => EACCES,
+                        // Остальное оставим как «прочее»: там ниже есть общий путь с wperror().
+                        _ => EPERM,
+                    };
+                    Err(err)
+                }
             }
         });
 

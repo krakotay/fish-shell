@@ -69,20 +69,47 @@ fn main() {
 
     rsconf::rebuild_if_env_changed("FISH_GETTEXT_EXTRACTION_FILE");
 
-    cc::Build::new().file("src/libc.c").compile("flibc.a");
-
-    let mut build = cc::Build::new();
-    // Add to the default library search path
-    build.flag_if_supported("-L/usr/local/lib/");
-    rsconf::add_library_search_path("/usr/local/lib");
-    let mut target = Target::new_from(build).unwrap();
-    // Keep verbose mode on until we've ironed out rust build script stuff
-    target.set_verbose(true);
-    detect_cfgs(&mut target);
-
     #[cfg(all(target_env = "gnu", target_feature = "crt-static"))]
     compile_error!("Statically linking against glibc has unavoidable crashes and is unsupported. Use dynamic linking or link statically against musl.");
+
+    rsconf::rebuild_if_paths_changed(&["src", "printf", "Cargo.toml", "Cargo.lock", "build.rs"]);
+    #[cfg(feature = "embed-data")]
+    #[cfg(not(debug_assertions))]
+    rsconf::rebuild_if_paths_changed(&["doc_src", "share"]);
+
+    rsconf::rebuild_if_env_changed("FISH_GETTEXT_EXTRACTION_FILE");
+
+    // Всё, что связано с C-шарами — только не-Windows.
+    #[cfg(not(target_os = "windows"))]
+    {
+        use rsconf::Target;
+        let mut build = cc::Build::new();
+        build.flag_if_supported("-L/usr/local/lib/");
+        rsconf::add_library_search_path("/usr/local/lib");
+        let mut target = Target::new_from(build).unwrap();
+        target.set_verbose(true);
+        detect_cfgs(&mut target);
+
+        // Собственно компиляция libc.c
+        cc::Build::new().file("src/libc.c").compile("fish_c_shims");
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        println!("cargo:warning=Skipping C shims on Windows");
+    }
 }
+
+#[cfg(not(target_os = "windows"))]
+fn build_c_shims() {
+    cc::Build::new()
+        .file("src/libc.c")
+        // .include("src") // если нужно
+        .compile("fish_c_shims");
+}
+
+#[cfg(target_os = "windows")]
+fn build_c_shims() {}
 
 /// Check target system support for certain functionality dynamically when the build is invoked,
 /// without their having to be explicitly enabled in the `cargo build --features xxx` invocation.

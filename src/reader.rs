@@ -866,7 +866,7 @@ pub fn reader_init(will_restore_foreground_pgroup: bool) {
     // Save the initial terminal mode.
     // Note this field is read by a signal handler, so do it atomically, with a leaked mode.
     let mut terminal_mode_on_startup = unsafe { std::mem::zeroed::<libc::termios>() };
-    let ret = unsafe { libc::tcgetattr(libc::STDIN_FILENO, &mut terminal_mode_on_startup) };
+    let ret = unsafe { libc::tcgetattr(crate::compat::fd::STDIN_FILENO, &mut terminal_mode_on_startup) };
     // TODO: rationalize behavior if initial tcgetattr() fails.
     if ret == 0 {
         TERMINAL_MODE_ON_STARTUP.get_or_init(|| terminal_mode_on_startup);

@@ -152,8 +152,8 @@ impl BuiltinBind {
             out.push_utfstr(&escape(ecmd));
         }
         out.push('\n');
-
-        if !streams.out_is_redirected && isatty(libc::STDOUT_FILENO) {
+        
+        if !streams.out_is_redirected && isatty(crate::compat::fd::STDOUT_FILENO) {
             let mut colors = Vec::new();
             highlight_shell(&out, &mut colors, &parser.context(), false, None);
             let colored = colorize(&out, &colors, parser.vars());

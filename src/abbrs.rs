@@ -10,7 +10,10 @@ use once_cell::sync::Lazy;
 use crate::parse_constants::SourceRange;
 #[cfg(test)]
 use crate::tests::prelude::*;
+#[cfg(feature="regex-pcre2")]
 use pcre2::utf32::Regex;
+#[cfg(feature = "regex-rust")]
+pub struct Regex(fancy_regex::Regex);
 
 static ABBRS: Lazy<Mutex<AbbreviationSet>> = Lazy::new(|| Mutex::new(Default::default()));
 

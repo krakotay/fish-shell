@@ -8,8 +8,8 @@
 //! Type "exit" or "quit" to terminate the program.
 
 use std::{cell::RefCell, ops::ControlFlow, os::unix::prelude::OsStrExt};
-
-use libc::{STDIN_FILENO, TCSANOW, VEOF, VINTR};
+use crate::compat::fd::{STDIN_FILENO, STDOUT_FILENO};
+use libc::{TCSANOW, VEOF, VINTR};
 use once_cell::unsync::OnceCell;
 
 #[allow(unused_imports)]
@@ -265,7 +265,6 @@ fn throwing_main() -> i32 {
     use crate::io::FdOutputStream;
     use crate::io::IoChain;
     use crate::io::OutputStream::Fd;
-    use libc::{STDERR_FILENO, STDOUT_FILENO};
 
     set_interactive_session(true);
     topic_monitor_init();
@@ -295,7 +294,7 @@ fn throwing_main() -> i32 {
         return s.builtin_status_code();
     }
 
-    if !isatty(libc::STDIN_FILENO) {
+    if !isatty(STDIN_FILENO) {
         streams
             .err
             .appendln(wgettext!("Stdin must be attached to a tty."));

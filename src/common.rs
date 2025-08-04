@@ -1,5 +1,6 @@
 //! Prototypes for various functions, mostly string utilities, that are used by most parts of fish.
 
+use crate::compat::fd::STDIN_FILENO;
 use crate::expand::{
     BRACE_BEGIN, BRACE_END, BRACE_SEP, BRACE_SPACE, HOME_DIRECTORY, INTERNAL_SEPARATOR,
     PROCESS_EXPAND_SELF, PROCESS_EXPAND_SELF_STR, VARIABLE_EXPAND, VARIABLE_EXPAND_SINGLE,
@@ -19,14 +20,15 @@ use crate::wildcard::{ANY_CHAR, ANY_STRING, ANY_STRING_RECURSIVE};
 use crate::wutil::encoding::{mbrtowc, wcrtomb, zero_mbstate, AT_LEAST_MB_LEN_MAX};
 use crate::wutil::fish_iswalnum;
 use bitflags::bitflags;
-use libc::{SIGTTOU, SIG_IGN, STDIN_FILENO};
+#[cfg(unix)]
+use libc::{SIGTTOU, SIG_IGN};
+
 use once_cell::sync::OnceCell;
 use std::cell::{Cell, RefCell};
 use std::env;
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::mem;
 use std::ops::{Deref, DerefMut};
-use std::os::unix::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
 use std::sync::{Arc, MutexGuard};
@@ -1023,8 +1025,14 @@ pub fn exit_without_destructors(code: libc::c_int) -> ! {
     unsafe { libc::_exit(code) };
 }
 
+#[cfg(unix)]
 pub fn shell_modes() -> MutexGuard<'static, libc::termios> {
     crate::reader::SHELL_MODES.lock().unwrap()
+}
+#[cfg(windows)]
+#[allow(dead_code)]
+pub fn shell_modes() {
+    // На Windows нет termios — заглушка.
 }
 
 /// The character to use where the text has been truncated. Is an ellipsis on unicode system and a $
@@ -1072,7 +1080,7 @@ pub static PROGRAM_NAME: OnceCell<&'static wstr> = OnceCell::new();
 /// the multiline prompt usable. See [#2859](https://github.com/fish-shell/fish-shell/issues/2859)
 /// and <https://github.com/Microsoft/BashOnWindows/issues/545>
 pub fn has_working_tty_timestamps() -> bool {
-    if cfg!(any(target_os = "windows", cygwin)) {
+    if cfg!(any(target_os = "windows", target_os = "cygwin")) {
         false
     } else if cfg!(target_os = "linux") {
         !is_windows_subsystem_for_linux(WSL::V1)
@@ -1332,6 +1340,7 @@ fn can_be_encoded(wc: char) -> bool {
     unsafe { wcrtomb(converted.as_mut_ptr(), wc as u32, &mut state) != 0_usize.wrapping_sub(1) }
 }
 
+#[cfg(unix)]
 /// Call read, blocking and repeating on EINTR. Exits on EAGAIN.
 /// Return the number of bytes read, or 0 on EOF, or an error.
 pub fn read_blocked(fd: RawFd, buf: &mut [u8]) -> nix::Result<usize> {
@@ -1343,6 +1352,12 @@ pub fn read_blocked(fd: RawFd, buf: &mut [u8]) -> nix::Result<usize> {
         return res;
     }
 }
+#[cfg(windows)]
+#[allow(dead_code)]
+pub fn read_blocked<T>(_fd: T, _buf: &mut [u8]) -> std::io::Result<usize> {
+    // Не используется на Windows в текущей портировке.
+    Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+}
 
 /// Test if the string is a valid function name.
 pub fn valid_func_name(name: &wstr) -> bool {
@@ -1353,6 +1368,7 @@ pub fn valid_func_name(name: &wstr) -> bool {
     || name.contains('\0'))
 }
 
+#[cfg(unix)]
 /// A rusty port of the C++ `write_loop()` function from `common.cpp`. This should be deprecated in
 /// favor of native rust read/write methods at some point.
 pub fn safe_write_loop<Fd: AsRawFd>(fd: &Fd, buf: &[u8]) -> std::io::Result<()> {
@@ -1373,8 +1389,16 @@ pub fn safe_write_loop<Fd: AsRawFd>(fd: &Fd, buf: &[u8]) -> std::io::Result<()> 
     }
     Ok(())
 }
-
+#[cfg(unix)]
 pub use safe_write_loop as write_loop;
+
+
+#[cfg(windows)]
+#[allow(dead_code)]
+pub fn write_loop<Fd>(_fd: &Fd, _buf: &[u8]) -> std::io::Result<()> {
+    // На Windows эта функция не используется; даём нейтральную заглушку.
+    Ok(())
+}
 
 // Output writes always succeed; this adapter allows us to use it in a write-like macro.
 struct OutputWriteAdapter<'a, T: Output>(&'a mut T);
@@ -1482,14 +1506,18 @@ pub fn timef() -> Timepoint {
 
 /// Be able to restore the term's foreground process group.
 /// This is set during startup and not modified after.
-static INITIAL_FG_PROCESS_GROUP: AtomicI32 = AtomicI32::new(-1); // HACK, should be pid_t
+static INITIAL_FG_PROCESS_GROUP: AtomicI32 = AtomicI32::new(-1);
+#[cfg(unix)]
 const _: () = assert!(mem::size_of::<i32>() >= mem::size_of::<libc::pid_t>());
-
+#[cfg(unix)]
 /// Save the value of tcgetpgrp so we can restore it on exit.
 pub fn save_term_foreground_process_group() {
     INITIAL_FG_PROCESS_GROUP.store(unsafe { libc::tcgetpgrp(STDIN_FILENO) }, Ordering::Relaxed);
 }
+#[cfg(windows)]
+pub fn save_term_foreground_process_group() {}
 
+#[cfg(unix)]
 pub fn restore_term_foreground_process_group_for_exit() {
     // We wish to restore the tty to the initial owner. There's two ways this can go wrong:
     //  1. We may steal the tty from someone else (#7060).
@@ -1507,6 +1535,8 @@ pub fn restore_term_foreground_process_group_for_exit() {
         }
     }
 }
+#[cfg(windows)]
+pub fn restore_term_foreground_process_group_for_exit() {}
 
 #[allow(unused)]
 // This function is unused in some configurations/on some platforms
@@ -1894,6 +1924,7 @@ impl<T, F: FnOnce(T)> ScopeGuarding for ScopeGuard<T, F> {}
 pub const fn assert_send<T: Send>() {}
 pub const fn assert_sync<T: Sync>() {}
 
+#[cfg(unix)]
 /// This function attempts to distinguish between a console session (at the actual login vty) and a
 /// session within a terminal emulator inside a desktop environment or over SSH. Unfortunately
 /// there are few values of $TERM that we can interpret as being exclusively console sessions, and
@@ -1903,7 +1934,16 @@ pub const fn assert_sync<T: Sync>() {}
 pub fn is_console_session() -> bool {
     static IS_CONSOLE_SESSION: OnceCell<bool> = OnceCell::new();
     *IS_CONSOLE_SESSION.get_or_init(|| {
-        const PATH_MAX: usize = libc::PATH_MAX as usize;
+        const PATH_MAX: usize = {
+            #[cfg(any(unix, target_os = "wasi"))]
+            {
+                libc::PATH_MAX as usize
+            }
+            #[cfg(windows)]
+            {
+                32767
+            } // максимум для WinAPI в WCHAR
+        } as usize;
         let mut tty_name = [0u8; PATH_MAX];
         unsafe {
             if libc::ttyname_r(STDIN_FILENO, tty_name.as_mut_ptr().cast(), tty_name.len()) != 0 {
@@ -1925,6 +1965,12 @@ pub fn is_console_session() -> bool {
             None => true,
         }
     })
+}
+#[cfg(windows)]
+pub fn is_console_session() -> bool {
+    // Упростим: считаем, что это не «консольный TTY как на Unix».
+    // Если понадобится — можно сделать проверку через WinAPI/atty.
+    false
 }
 
 /// Asserts that a slice is alphabetically sorted by a <code>&[wstr]</code> `name` field.

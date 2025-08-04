@@ -22,6 +22,7 @@ use crate::wildcard::{ANY_CHAR, ANY_STRING, ANY_STRING_RECURSIVE};
 use crate::wutil::{
     dir_iter::DirIter, fish_wcstoi, normalize_path, waccess, wbasename, wdirname, wstat,
 };
+#[cfg(not(windows))]
 use libc::PATH_MAX;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
